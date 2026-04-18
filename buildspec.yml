@@ -1,0 +1,44 @@
+version: 0.2
+
+env:
+  variables:
+    AWS_DEFAULT_REGION: ap-south-1
+    IMAGE_REPO_NAME: brain-task-app
+    IMAGE_TAG: latest
+    EKS_CLUSTER_NAME: brain-task-cluster
+    K8S_NAMESPACE: default
+    DEPLOYMENT_NAME: brain-task-app
+    CONTAINER_NAME: brain-task-app
+
+phases:
+  pre_build:
+    commands:
+      - echo "Logging in to Amazon ECR..."
+      - ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+      - REPOSITORY_URI=$ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$IMAGE_REPO_NAME
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com
+      - echo "Updating kubeconfig for EKS..."
+      - aws eks update-kubeconfig --region $AWS_DEFAULT_REGION --name $EKS_CLUSTER_NAME
+
+  build:
+    commands:
+      - echo "Build started on $(date)"
+      - echo "Building Docker image..."
+      - docker build -t $IMAGE_REPO_NAME:$IMAGE_TAG .
+      - docker tag $IMAGE_REPO_NAME:$IMAGE_TAG $REPOSITORY_URI:$IMAGE_TAG
+
+  post_build:
+    commands:
+      - echo "Pushing Docker image to ECR..."
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+      - echo "Replacing image in Kubernetes manifest..."
+      - sed -i "s|REPLACE_IMAGE_URI|$REPOSITORY_URI:$IMAGE_TAG|g" k8s/deployment.yaml
+      - echo "Deploying to EKS..."
+      - kubectl apply -f k8s/deployment.yaml -n $K8S_NAMESPACE
+      - kubectl apply -f k8s/service.yaml -n $K8S_NAMESPACE
+      - kubectl rollout restart deployment/$DEPLOYMENT_NAME -n $K8S_NAMESPACE
+      - kubectl rollout status deployment/$DEPLOYMENT_NAME -n $K8S_NAMESPACE
+
+artifacts:
+  files:
+    - '**/*'
