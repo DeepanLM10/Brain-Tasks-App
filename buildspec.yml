@@ -1,4 +1,3 @@
-cat > buildspec.yml <<'EOF'
 version: 0.2
 
 env:
