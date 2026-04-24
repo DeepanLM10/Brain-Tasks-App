@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
         - name: brain-task-app
-          image: REPLACE_IMAGE_URI
+          image: 143982427845.dkr.ecr.ap-south-1.amazonaws.com/brain-tasks-app:latest
           imagePullPolicy: Always
           ports:
-            - containerPort: 80
+            - containerPort: 3000
